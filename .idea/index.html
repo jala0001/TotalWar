@@ -7,6 +7,7 @@
   <style>
     body {
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       height: 100vh;
@@ -17,10 +18,25 @@
       border: 2px solid #000;
       background-color: #fff;
     }
+    #scoreBoard {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+    #restartButton {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="800" height="400"></canvas>
+<div id="scoreBoard">
+  <span id="timer">Time: 00:00:00:000</span> |
+  <span id="highscore">Highscore: 00:00:00:000</span>
+</div>
+<canvas id="gameCanvas"></canvas>
+<button id="restartButton">Restart Game</button>
 <script src="game.js"></script>
 </body>
 </html>
