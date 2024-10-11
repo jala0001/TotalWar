@@ -25,7 +25,7 @@ function drawBackground() {
 
 const frameWidth = 64;  // Juster bredden til bredden af en frame
 const frameHeight = 64;  // Juster højden til højden af en frame
-const frameCount = 3;  // Antal frames i dit spritesheet
+const frameCount = 4;  // Antal frames i dit spritesheet
 const frameSpeed = 5;  // Hastighed på animationsskift (jo højere værdi, jo langsommere animation)
 
 let frameIndex = 0;  // Holder styr på hvilken frame, der vises
@@ -47,6 +47,11 @@ let movingRight = false;
 let enemies = [];
 let enemySpawnInterval = 2000;
 let lastSpawnTime = 0;
+
+let boss = null;  // Variabel til bossen
+let bossSpawnTime = 20000;  // 20 sekunder
+let lastBossSpawnTime = Date.now();  // Tidspunktet for sidste boss spawn
+
 
 // Game over flag
 let gameOver = false;
@@ -112,6 +117,12 @@ function resetGame() {
     gameOver = false;  // Nulstil game over flag
     highscoreTime = sessionStorage.getItem('highscore') || 0;  // Hent highscore igen fra sessionStorage
 
+    // Nulstil spillere, fjender og tal
+    players = [{ x: canvas.width / 2 - 20, y: canvas.height - 50, width: 40, height: 40, bullets: [] }];
+    enemies = [];
+    numberObjects = [];
+    boss = null;  // Nulstil bossen, så den forsvinder ved genstart
+
     // Opdater highscore display
     let hours = Math.floor(highscoreTime / 3600000);
     let minutes = Math.floor((highscoreTime % 3600000) / 60000);
@@ -119,6 +130,7 @@ function resetGame() {
     let milliseconds = highscoreTime % 1000;
     highscoreDisplay.textContent = `Highscore: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(milliseconds).padStart(3, '0')}`;
 }
+
 
 // Håndtering af skud
 function shoot(mouseX, mouseY) {
@@ -314,7 +326,6 @@ function updateBullets() {
     });
 }
 
-// Tjek om spilleren bliver ramt af fjenden
 function checkPlayerCollision() {
     players.forEach((player, playerIndex) => {
         enemies.forEach((enemy, enemyIndex) => {
@@ -334,8 +345,34 @@ function checkPlayerCollision() {
                 }
             }
         });
+
+        // Tjek kollision med bossen
+        if (boss &&
+            player.x < boss.x + boss.width &&
+            player.x + player.width > boss.x &&
+            player.y < boss.y + boss.height &&
+            player.y + player.height > boss.y) {
+
+            // Hvis spilleren har fire eller færre firkanter, er det game over
+            if (players.length <= 4) {
+                gameOver = true;
+            } else {
+                // Hvis spilleren har flere end fire firkanter, fjern fire firkanter
+                players = players.slice(0, players.length - 4);  // Fjern fire firkanter
+            }
+
+            // Fjern bossen efter kollision
+            boss = null;
+
+            // Tjek om der er flere blå firkanter tilbage
+            if (players.length === 0) {
+                gameOver = true;  // Slut spillet, hvis der ikke er flere blå firkanter tilbage
+            }
+        }
     });
 }
+
+
 
 // Spawn nye pindmænd/monstre
 function spawnEnemies() {
@@ -369,6 +406,83 @@ function updateEnemies() {
     });
 }
 
+function spawnBoss() {
+    if (!boss && Date.now() - lastBossSpawnTime > bossSpawnTime) {
+        boss = {
+            x: Math.random() * (canvas.width - frameWidth * 4),
+            y: 0,
+            width: frameWidth * 4,  // Gør bossen 4 gange bredere
+            height: frameHeight * 4,  // Gør bossen 4 gange højere
+            speed: 1,  // Bossen er lidt langsommere end almindelige fjender
+            health: 4  // Bossen har 4 liv
+        };
+        lastBossSpawnTime = Date.now();  // Opdater spawn-tidspunktet
+    }
+}
+
+function drawBoss() {
+    if (boss) {
+        // Brug samme spritesheet som fjenderne
+        let frameX = (frameIndex % frameCount) * frameWidth;
+
+        // Tegn bossen med den aktuelle frame fra spritesheetet
+        ctx.drawImage(enemySprite, frameX, 0, frameWidth, frameHeight, boss.x, boss.y, boss.width, boss.height);
+
+        // Tegn health-bar ovenover bossen
+        let healthBarWidth = boss.width * (boss.health / 4);  // Længden på health-baren afhænger af bossens nuværende liv
+        ctx.fillStyle = "red";  // Rød health-bar
+        ctx.fillRect(boss.x, boss.y - 10, healthBarWidth, 5);  // Tegn health-baren 10px over bossen
+
+        // Tegn en sort ramme rundt om health-baren
+        ctx.strokeStyle = "black";
+        ctx.strokeRect(boss.x, boss.y - 10, boss.width, 5);  // Ramme med samme bredde som bossen
+    }
+}
+
+
+function updateBoss() {
+    if (boss) {  // Kun opdatere bossen, hvis den stadig eksisterer
+        let dx = players[0].x - boss.x;
+        let dy = players[0].y - boss.y;
+        let distance = Math.sqrt(dx * dx + dy * dy);
+        let speedFactor = boss.speed / distance;
+
+        boss.x += dx * speedFactor;
+        boss.y += dy * speedFactor;
+
+        // Fjern bossen, hvis den går uden for skærmen
+        if (boss.y > canvas.height) {
+            boss = null;  // Fjern bossen, hvis den går uden for skærmen
+        }
+    }
+}
+
+
+function checkBulletCollisionWithBoss() {
+    if (boss) {  // Kun tjekke kollisioner, hvis bossen eksisterer
+        players.forEach(player => {
+            player.bullets.forEach((bullet, bulletIndex) => {
+                // Tjek om kuglen rammer bossen
+                if (bullet.x < boss.x + boss.width && bullet.x + bullet.width > boss.x &&
+                    bullet.y < boss.y + boss.height && bullet.y + bullet.height > boss.y) {
+                    player.bullets.splice(bulletIndex, 1);  // Fjern kuglen
+                    boss.health--;  // Bossen mister et liv
+
+                    // Hvis bossens liv når 0, fjern den efter loopet er færdigt
+                    if (boss.health <= 0) {
+                        setTimeout(() => {
+                            boss = null;  // Fjern bossen efter en forsinkelse for at undgå fejl i loopet
+                        }, 0);
+                    }
+                }
+            });
+        });
+    }
+}
+
+
+
+
 // Tegn alt og opdater spillet
 function gameLoop() {
     if (gameOver) {
@@ -389,9 +503,13 @@ function gameLoop() {
     drawPlayers();
     updateBullets();
     drawBullets();  // Tegn skuddene
-    drawEnemies();  // Tegn fjenderne med animation
+    drawEnemies();  // Tegn fjenderne
     updateEnemies();
     checkPlayerCollision();  // Tjek om spillerne bliver ramt
+    spawnBoss();  // Spawner boss hver 20. sekund
+    drawBoss();   // Tegn bossen
+    updateBoss();  // Opdater bossens bevægelse
+    checkBulletCollisionWithBoss();  // Tjek om kugler rammer bossen
     updateNumbers();
     drawNumbers();
     checkNumberCollision();
@@ -401,6 +519,7 @@ function gameLoop() {
 
     requestAnimationFrame(gameLoop);
 }
+
 
 // Event listener for bevægelse med "A" og "D"
 document.addEventListener("keydown", function(event) {
